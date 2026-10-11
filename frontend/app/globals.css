@@ -1,0 +1,96 @@
+:root {
+  color-scheme: light;
+  --background: #f4f5f7;
+  --foreground: #18212f;
+  --muted: #667085;
+  --accent: #6d5dfc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+}
+
+.card {
+  width: min(100%, 620px);
+  padding: clamp(28px, 7vw, 56px);
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgb(16 24 40 / 8%);
+}
+
+.eyebrow {
+  margin: 0 0 16px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(36px, 8vw, 54px);
+  letter-spacing: -0.055em;
+}
+
+.intro {
+  margin: 16px 0 28px;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #98a2b3;
+}
+
+.status-dot-online {
+  background: #12b76a;
+}
+
+.status-dot-offline {
+  background: #f04438;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 28px;
+}
+
+.links a {
+  color: #5145cd;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.links a:hover {
+  text-decoration: underline;
+}
