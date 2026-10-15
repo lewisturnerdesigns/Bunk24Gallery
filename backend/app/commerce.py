@@ -12,6 +12,7 @@ def create_checkout_session(email: str, line_items: list[dict], order_id: int) -
     try:
         session = stripe.checkout.Session.create(
             mode="payment", customer_email=email, line_items=line_items,
+            shipping_address_collection={"allowed_countries": ["US"]},
             success_url=success_url + "?session_id={CHECKOUT_SESSION_ID}",
             cancel_url=cancel_url, client_reference_id=str(order_id),
             metadata={"order_id": str(order_id)},
