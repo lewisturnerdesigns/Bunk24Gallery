@@ -17,7 +17,6 @@ from app.commerce import create_checkout_session
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
 
-@asynccontextmanager
 def seed_demo_catalog() -> None:
     if os.getenv("SEED_DEMO_DATA", "false").lower() != "true":
         return
