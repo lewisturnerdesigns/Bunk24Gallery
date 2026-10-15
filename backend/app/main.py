@@ -18,24 +18,13 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    # Convenient for local development. Deployments should apply the checked-in SQL migration first.
+    # Convenient locally; deployments should apply the checked-in SQL migration first.
     Base.metadata.create_all(bind=engine)
     yield
 
-app = FastAPI(
-    title="BUNK24 Gallery API",
-    description="Catalog, orders, and checkout API for BUNK24 — art by TURNER.",
-    version="1.0.0",
-    lifespan=lifespan,
-)
+app = FastAPI(title="BUNK24 Gallery API", description="Catalog, orders, and checkout API for BUNK24 — art by TURNER.", version="1.0.0", lifespan=lifespan)
 origins = [item.strip() for item in os.getenv("FRONTEND_ORIGIN", "http://localhost:3000").split(",") if item.strip()]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
-)
+app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=False, allow_methods=["GET", "POST", "PATCH", "OPTIONS"], allow_headers=["Authorization", "Content-Type"])
 
 def get_db():
     session = Session(engine)
@@ -60,11 +49,7 @@ def readiness() -> dict[str, str]:
 @app.get("/api/artworks", response_model=list[ArtworkOut], tags=["catalog"])
 def list_artworks(db: Session = Depends(get_db)):
     try:
-        return db.scalars(
-            select(models.Artwork).where(models.Artwork.published.is_(True))
-            .options(selectinload(models.Artwork.variants))
-            .order_by(models.Artwork.created_at.desc())
-        ).all()
+        return db.scalars(select(models.Artwork).where(models.Artwork.published.is_(True)).options(selectinload(models.Artwork.variants)).order_by(models.Artwork.created_at.desc())).all()
     except SQLAlchemyError as error:
         logger.exception("Could not load artwork catalog")
         raise HTTPException(status_code=503, detail="Catalog is temporarily unavailable") from error
@@ -75,15 +60,14 @@ def login(form: OAuth2PasswordRequestForm = Depends()):
     if not admin_email or form.username.lower() != admin_email.lower() or not verify_admin_password(form.password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password", headers={"WWW-Authenticate": "Bearer"})
     try:
-        token = create_access_token(admin_email)
+        return {"access_token": create_access_token(admin_email), "token_type": "bearer"}
     except RuntimeError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
-    return {"access_token": token, "token_type": "bearer"}
 
 @app.get("/admin/orders", tags=["admin"])
 def list_orders(_: str = Depends(require_admin), db: Session = Depends(get_db)):
     orders = db.scalars(select(models.Order).options(selectinload(models.Order.items)).order_by(models.Order.created_at.desc()).limit(100)).all()
-    return [{"id": order.id, "email": order.email, "status": order.status, "currency": order.currency, "total_cents": order.total_cents, "created_at": order.created_at, "items": [{"variant_id": item.variant_id, "quantity": item.quantity, "unit_price_cents": item.unit_price_cents} for item in order.items]} for order in orders]
+    return [{"id": o.id, "email": o.email, "status": o.status, "currency": o.currency, "total_cents": o.total_cents, "created_at": o.created_at, "items": [{"variant_id": i.variant_id, "quantity": i.quantity, "unit_price_cents": i.unit_price_cents} for i in o.items]} for o in orders]
 
 @app.post("/api/checkout", response_model=CheckoutResponse, tags=["checkout"])
 def checkout(payload: CheckoutRequest, db: Session = Depends(get_db)):
@@ -91,7 +75,7 @@ def checkout(payload: CheckoutRequest, db: Session = Depends(get_db)):
     for item in payload.items:
         requested[item.variant_id] = requested.get(item.variant_id, 0) + item.quantity
     variants = db.scalars(select(models.PrintVariant).where(models.PrintVariant.id.in_(requested), models.PrintVariant.active.is_(True)).with_for_update()).all()
-    by_id = {variant.id: variant for variant in variants}
+    by_id = {v.id: v for v in variants}
     if len(by_id) != len(requested):
         raise HTTPException(status_code=400, detail="One or more print variants are unavailable.")
     total = 0
@@ -102,24 +86,16 @@ def checkout(payload: CheckoutRequest, db: Session = Depends(get_db)):
         total += variant.price_cents * quantity
     order = models.Order(email=str(payload.email), total_cents=total, currency="usd", status="pending")
     db.add(order)
-    db.flush()
-    for variant_id, quantity in requested.items():
-        variant = by_id[variant_id]
-        db.add(models.OrderItem(order_id=order.id, variant_id=variant_id, quantity=quantity, unit_price_cents=variant.price_cents))
-    db.commit()
-    stripe_items = [{
-        "quantity": quantity,
-        "price_data": {
-            "currency": "usd",
-            "unit_amount": by_id[variant_id].price_cents,
-            "product_data": {"name": by_id[variant_id].artwork.title + " — " + by_id[variant_id].label},
-        },
-    } for variant_id, quantity in requested.items()]
     try:
-        url = create_checkout_session(str(payload.email), stripe_items, order.id)
+        db.flush()
+        for variant_id, quantity in requested.items():
+            db.add(models.OrderItem(order_id=order.id, variant_id=variant_id, quantity=quantity, unit_price_cents=by_id[variant_id].price_cents))
+        db.flush()
+        stripe_items = [{"quantity": quantity, "price_data": {"currency": "usd", "unit_amount": by_id[variant_id].price_cents, "product_data": {"name": by_id[variant_id].artwork.title + " — " + by_id[variant_id].label}}} for variant_id, quantity in requested.items()]
+        url, session_id = create_checkout_session(str(payload.email), stripe_items, order.id)
+        order.stripe_session_id = session_id
+        db.commit()
+        return CheckoutResponse(checkout_url=url)
     except Exception:
         db.rollback()
         raise
-    order.stripe_session_id = url.split("session_id=")[-1] if "session_id=" in url else None
-    db.commit()
-    return CheckoutResponse(checkout_url=url)
