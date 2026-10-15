@@ -59,7 +59,7 @@ Use a managed PostgreSQL provider with TLS enabled. Set DATABASE_URL to the prov
 
 ### Stripe
 
-Set STRIPE_SECRET_KEY and STRIPE_SUCCESS_URL / STRIPE_CANCEL_URL to enable Checkout session creation. Keep the secret key on the server only. Before accepting live payments, implement and verify a Stripe webhook, persist event IDs idempotently, and transition order states only from verified webhook events. A Checkout redirect alone is not proof of payment. Inventory reservation, shipping, tax, refunds, and order fulfillment are not complete.
+Set STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, and STRIPE_SUCCESS_URL / STRIPE_CANCEL_URL. Configure the Stripe dashboard webhook endpoint as https://YOUR_API_HOST/webhooks/stripe and subscribe to checkout.session.completed and checkout.session.async_payment_succeeded. The API verifies Stripe signatures, records event IDs for idempotency, marks paid orders, and decrements inventory. Test webhook retries and inventory edge cases in Stripe test mode before live sales. Shipping address collection is enabled for the US, but shipping rates, tax calculation, refunds, and fulfillment integrations still need to be configured.
 
 ## Security and launch checklist
 
@@ -68,8 +68,9 @@ Set STRIPE_SECRET_KEY and STRIPE_SUCCESS_URL / STRIPE_CANCEL_URL to enable Check
 - [ ] Configure TLS and managed database backups.
 - [ ] Add rate limiting to login and checkout endpoints at the edge/API gateway.
 - [ ] Provision the initial admin account securely.
-- [ ] Add verified Stripe webhooks and idempotent order fulfillment before live sales.
+- [ ] Configure and test the Stripe webhook endpoint with STRIPE_WEBHOOK_SECRET.
+- [ ] Configure shipping rates and tax calculation before live sales.
 - [ ] Add shipping/tax rules, refund policy, privacy policy, terms, and customer support contact.
 - [ ] Replace demo artwork and sample descriptions with TURNER's approved images, titles, sizes, and prices.
 
-The backend includes JWT-protected artwork creation, print variant management, inventory updates, order listing, and order-status routes. The browser-based admin console and live catalog/cart integration still need to be connected and tested before launch.
+The shop is connected to the live catalog and checkout API. The admin console supports JWT sign-in, artwork creation, print variant creation, inventory edits, and order-status management. Complete end-to-end tests, shipping/tax setup, and fulfillment operations before launch.
