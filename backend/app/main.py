@@ -149,7 +149,7 @@ def checkout(payload: CheckoutRequest, db: Session = Depends(get_db)):
     requested: dict[int, int] = {}
     for item in payload.items:
         requested[item.variant_id] = requested.get(item.variant_id, 0) + item.quantity
-    variants = db.scalars(select(models.PrintVariant).where(models.PrintVariant.id.in_(requested), models.PrintVariant.active.is_(True)).with_for_update()).all()
+    variants = db.scalars(select(models.PrintVariant).where(models.PrintVariant.id.in_(requested), models.PrintVariant.active.is_(True), models.PrintVariant.artwork.has(models.Artwork.published.is_(True))).with_for_update()).all()
     by_id = {v.id: v for v in variants}
     if len(by_id) != len(requested):
         raise HTTPException(status_code=400, detail="One or more print variants are unavailable.")
