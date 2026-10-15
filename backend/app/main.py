@@ -72,7 +72,7 @@ def readiness() -> dict[str, str]:
 @app.get("/api/artworks", response_model=list[ArtworkOut], tags=["catalog"])
 def list_artworks(db: Session = Depends(get_db)):
     try:
-        return db.scalars(select(models.Artwork).where(models.Artwork.published.is_(True)).options(selectinload(models.Artwork.variants)).order_by(models.Artwork.created_at.desc())).all()
+        return db.scalars(select(models.Artwork).where(models.Artwork.published.is_(True)).options(selectinload(models.Artwork.variants.and_(models.PrintVariant.active.is_(True)))).order_by(models.Artwork.created_at.desc())).all()
     except SQLAlchemyError as error:
         logger.exception("Could not load artwork catalog")
         raise HTTPException(status_code=503, detail="Catalog is temporarily unavailable") from error
