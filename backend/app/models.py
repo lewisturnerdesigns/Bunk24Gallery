@@ -33,6 +33,7 @@ class Order(Base):
     currency: Mapped[str] = mapped_column(String(3), default="usd")
     total_cents: Mapped[int] = mapped_column(Integer)
     stripe_session_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    inventory_reserved: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     items: Mapped[list["OrderItem"]] = relationship(back_populates="order", cascade="all, delete-orphan")
 
