@@ -55,11 +55,11 @@ The API has a Vercel entrypoint at backend/api/index.py and configuration in bac
 
 ### PostgreSQL
 
-Use a managed PostgreSQL provider with TLS enabled. Set DATABASE_URL to the provider's SQLAlchemy/psycopg connection URL. The API can create tables on startup for initial local development; for controlled deployments, apply backend/migrations/001_initial.sql before routing traffic.
+Use a managed PostgreSQL provider with TLS enabled. Set DATABASE_URL to the provider's SQLAlchemy/psycopg connection URL. The API can create tables on startup for initial local development; for controlled deployments, apply backend/migrations/001_initial.sql, 002_stripe_events.sql, and 003_inventory_reservations.sql before routing traffic.
 
 ### Stripe
 
-Set STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, and STRIPE_SUCCESS_URL / STRIPE_CANCEL_URL. Configure the Stripe dashboard webhook endpoint as https://YOUR_API_HOST/webhooks/stripe and subscribe to checkout.session.completed and checkout.session.async_payment_succeeded. The API verifies Stripe signatures, records event IDs for idempotency, marks paid orders, and decrements inventory. Test webhook retries and inventory edge cases in Stripe test mode before live sales. Shipping address collection is enabled for the US, but shipping rates, tax calculation, refunds, and fulfillment integrations still need to be configured.
+Set STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, and STRIPE_SUCCESS_URL / STRIPE_CANCEL_URL. Configure the Stripe dashboard webhook endpoint as https://YOUR_API_HOST/webhooks/stripe and subscribe to checkout.session.completed, checkout.session.async_payment_succeeded, checkout.session.expired, and checkout.session.async_payment_failed. The API verifies Stripe signatures, records event IDs for idempotency, reserves stock during checkout, releases reservations on expired/failed sessions, and marks verified paid orders. Test webhook retries and inventory edge cases in Stripe test mode before live sales. Shipping address collection is enabled for the US, but shipping rates, tax calculation, refunds, and fulfillment integrations still need to be configured.
 
 ## Security and launch checklist
 
