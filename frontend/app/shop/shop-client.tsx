@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 type Variant = { id: number; sku: string; label: string; price_cents: number; inventory_quantity: number };
 type Artwork = { id: number; slug: string; title: string; description: string; image_url: string; published: boolean; variants: Variant[] };
@@ -44,7 +44,7 @@ export default function ShopClient() {
     });
   }
 
-  async function checkout(event: React.FormEvent<HTMLFormElement>) {
+  async function checkout(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!count || !email) return;
     setCheckoutBusy(true);
