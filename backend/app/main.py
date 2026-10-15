@@ -146,6 +146,8 @@ def update_order_status(order_id: int, payload: OrderStatusUpdate, _: str = Depe
         raise HTTPException(status_code=409, detail="Orders cannot be moved back to pending.")
     if order.status in {"shipped", "cancelled", "refunded"} and payload.status != order.status:
         raise HTTPException(status_code=409, detail="This order status is final.")
+    if payload.status == "cancelled" and order.status != "pending":
+        raise HTTPException(status_code=409, detail="Only pending orders can be cancelled until refunds are configured.")
     if payload.status in {"processing", "shipped"} and order.status == "pending":
         raise HTTPException(status_code=409, detail="Payment must be confirmed before fulfillment.")
     if payload.status == "shipped" and order.status not in {"paid", "processing"}:
