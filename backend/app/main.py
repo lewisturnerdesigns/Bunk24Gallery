@@ -139,9 +139,19 @@ def update_order_status(order_id: int, payload: OrderStatusUpdate, _: str = Depe
     order = db.get(models.Order, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found.")
-    if payload.status in {"paid", "processing", "shipped"} and order.status == "pending":
-        raise HTTPException(status_code=409, detail="A pending order cannot be marked paid manually; verify its payment webhook first.")
-    if payload.status in {"cancelled", "refunded"} and order.inventory_reserved:
+    if payload.status == "paid":
+        raise HTTPException(status_code=409, detail="Only a verified Stripe webhook can mark an order paid.")
+    if payload.status == "refunded":
+        raise HTTPException(status_code=409, detail="Refund processing is not configured yet.")
+    if payload.status == "pending":
+        raise HTTPException(status_code=409, detail="Orders cannot be moved back to pending.")
+    if order.status in {"shipped", "cancelled", "refunded"} and payload.status != order.status:
+        raise HTTPException(status_code=409, detail="This order status is final.")
+    if payload.status in {"processing", "shipped"} and order.status == "pending":
+        raise HTTPException(status_code=409, detail="Payment must be confirmed before fulfillment.")
+    if payload.status == "shipped" and order.status not in {"paid", "processing"}:
+        raise HTTPException(status_code=409, detail="Only paid or processing orders can be shipped.")
+    if payload.status == "cancelled" and order.inventory_reserved:
         items = db.scalars(select(models.OrderItem).where(models.OrderItem.order_id == order.id)).all()
         for item in items:
             variant = db.scalar(select(models.PrintVariant).where(models.PrintVariant.id == item.variant_id).with_for_update())
