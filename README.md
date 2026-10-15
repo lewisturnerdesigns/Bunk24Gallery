@@ -7,7 +7,7 @@ A full-stack art gallery and print-store foundation for BUNK24, featuring the wo
 - Web: Next.js App Router, React, TypeScript, responsive CSS.
 - API: FastAPI, SQLAlchemy 2, PostgreSQL.
 - Data: artwork, print variants, orders, and order items.
-- Commerce: Stripe Checkout integration is environment-gated; this app never handles card details.
+- Commerce: Stripe Checkout session creation is environment-gated; this app never handles card details.
 - Local development: Docker Compose.
 
 ## Run locally
@@ -15,7 +15,7 @@ A full-stack art gallery and print-store foundation for BUNK24, featuring the wo
 Prerequisites: Docker Desktop and Git.
 
 1. Clone the repository.
-2. Copy .env.example to .env and replace development secrets.
+2. Copy .env.example to .env and replace the example database password and JWT secret.
 3. Run from the repository root:
 
    docker compose up --build
@@ -24,30 +24,34 @@ Prerequisites: Docker Desktop and Git.
 
 Stop with docker compose down. To also delete the local database volume, use docker compose down -v.
 
+## Admin credentials
+
+Generate a bcrypt password hash using the backend dependencies. From the backend folder after installing requirements, run:
+
+    python -c "from getpass import getpass; from passlib.context import CryptContext; print(CryptContext(schemes=['bcrypt']).hash(getpass('New admin password: ')))"
+
+Put the resulting hash in ADMIN_PASSWORD_HASH and your admin email in ADMIN_EMAIL in the local .env file. Never put the plaintext password in environment files or source control. Set a unique random JWT_SECRET_KEY of at least 32 characters. The admin web page is a visual placeholder; use the API docs to exercise protected endpoints after obtaining a bearer token.
+
 ## Repository layout
 
 - frontend/app/ — public gallery, shop, admin landing, metadata, styling.
 - backend/app/main.py — FastAPI routes.
-- backend/app/models.py — SQLAlchemy models.
+- backend/app/models.py — SQLAlchemy models for artwork, variants, orders, and order items.
 - backend/app/schemas.py — request and response validation.
 - backend/app/security.py — JWT helpers and admin dependency.
 - backend/app/commerce.py — Stripe Checkout session creation.
-- backend/migrations/ — SQL migration scripts.
+- backend/migrations/ — initial PostgreSQL schema.
 - compose.yaml — local frontend, API, and PostgreSQL services.
-
-## Configuration
-
-See .env.example. Never commit a real .env, database password, JWT secret, or Stripe secret key. Use a long random JWT_SECRET_KEY in deployed environments. NEXT_PUBLIC_API_URL is public by design and must never contain a secret.
 
 ## Deployment notes
 
 ### Frontend on Vercel
 
-Import this repository into Vercel and set the Root Directory to frontend. Configure NEXT_PUBLIC_API_URL to the deployed API origin. Deploy the frontend independently from the API.
+Import this repository into Vercel and set the Root Directory to frontend. Configure NEXT_PUBLIC_API_URL to the deployed API origin. The current shop artwork cards are presentation/demo content and are not yet wired to the API checkout flow.
 
 ### API on Vercel or another ASGI host
 
-The API has a Vercel entrypoint at backend/api/index.py and configuration in backend/vercel.json. Configure DATABASE_URL, FRONTEND_ORIGIN, and JWT_SECRET_KEY in the deployment environment. Serverless instances are ephemeral, so do not rely on in-process state or local files for persistence.
+The API has a Vercel entrypoint at backend/api/index.py and configuration in backend/vercel.json. Configure DATABASE_URL, FRONTEND_ORIGIN, JWT_SECRET_KEY, ADMIN_EMAIL, ADMIN_PASSWORD_HASH, and Stripe settings in the deployment environment. Serverless instances are ephemeral, so do not rely on in-process state or local files for persistence.
 
 ### PostgreSQL
 
@@ -55,7 +59,7 @@ Use a managed PostgreSQL provider with TLS enabled. Set DATABASE_URL to the prov
 
 ### Stripe
 
-Set STRIPE_SECRET_KEY and STRIPE_SUCCESS_URL / STRIPE_CANCEL_URL to enable Checkout session creation. Keep the secret key on the server only. Before accepting live payments, implement and verify a Stripe webhook, persist event IDs idempotently, and transition order states only from verified webhook events. A Checkout redirect alone is not proof of payment.
+Set STRIPE_SECRET_KEY and STRIPE_SUCCESS_URL / STRIPE_CANCEL_URL to enable Checkout session creation. Keep the secret key on the server only. Before accepting live payments, implement and verify a Stripe webhook, persist event IDs idempotently, and transition order states only from verified webhook events. A Checkout redirect alone is not proof of payment. Inventory reservation, shipping, tax, refunds, and order fulfillment are not complete.
 
 ## Security and launch checklist
 
@@ -63,9 +67,9 @@ Set STRIPE_SECRET_KEY and STRIPE_SUCCESS_URL / STRIPE_CANCEL_URL to enable Check
 - [ ] Restrict CORS to the exact production frontend origin.
 - [ ] Configure TLS and managed database backups.
 - [ ] Add rate limiting to login and checkout endpoints at the edge/API gateway.
-- [ ] Provision the initial admin password hash securely; never store a plaintext admin password.
+- [ ] Provision the initial admin account securely.
 - [ ] Add verified Stripe webhooks and idempotent order fulfillment before live sales.
 - [ ] Add shipping/tax rules, refund policy, privacy policy, terms, and customer support contact.
 - [ ] Replace demo artwork and sample descriptions with TURNER's approved images, titles, sizes, and prices.
 
-The admin page is currently a landing page, not an authenticated admin console. The backend has JWT-protected order listing, but production admin CRUD, inventory adjustments, Stripe webhooks, shipping/tax, and fulfillment integrations still need to be completed and tested before launch.
+The backend includes JWT-protected artwork creation, print variant management, inventory updates, order listing, and order-status routes. The browser-based admin console and live catalog/cart integration still need to be connected and tested before launch.
