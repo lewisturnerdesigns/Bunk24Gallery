@@ -17,9 +17,32 @@ logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
 
 @asynccontextmanager
+def seed_demo_catalog() -> None:
+    if os.getenv("SEED_DEMO_DATA", "false").lower() != "true":
+        return
+    with Session(engine) as db:
+        if db.scalars(select(models.Artwork.id).limit(1)).first() is not None:
+            return
+        demo = [
+            ("blue-hour", "Blue Hour", "Color study · demo catalog", "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format&fit=crop&w=1200&q=85", "B24-001-810", "8 × 10 in print", 4200),
+            ("wildflower-24", "Wildflower / 24", "Fine art print · demo catalog", "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?auto=format&fit=crop&w=1200&q=85", "B24-002-810", "8 × 10 in print", 4200),
+            ("a-quiet-noise", "A Quiet Noise", "Open edition · demo catalog", "https://images.unsplash.com/photo-1577083552431-6e5fd01aa342?auto=format&fit=crop&w=1200&q=85", "B24-003-810", "8 × 10 in print", 3800),
+            ("soft-collision", "Soft Collision", "Limited edition · demo catalog", "https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&w=1200&q=85", "B24-004-810", "8 × 10 in print", 4500),
+            ("after-the-rain", "After the Rain", "Open edition · demo catalog", "https://images.unsplash.com/photo-1577083288073-40892c0860a4?auto=format&fit=crop&w=1200&q=85", "B24-005-810", "8 × 10 in print", 3800),
+            ("color-has-memory", "Color Has Memory", "Limited edition · demo catalog", "https://images.unsplash.com/photo-1549490349-8643362247b5?auto=format&fit=crop&w=1200&q=85", "B24-006-810", "8 × 10 in print", 5200),
+        ]
+        for slug, title, description, image_url, sku, label, price_cents in demo:
+            artwork = models.Artwork(slug=slug, title=title, description=description, image_url=image_url, published=True)
+            db.add(artwork)
+            db.flush()
+            db.add(models.PrintVariant(artwork_id=artwork.id, sku=sku, label=label, price_cents=price_cents, inventory_quantity=25, active=True))
+        db.commit()
+
+@asynccontextmanager
 async def lifespan(_: FastAPI):
     # Convenient locally; deployments should apply the checked-in SQL migration first.
     Base.metadata.create_all(bind=engine)
+    seed_demo_catalog()
     yield
 
 app = FastAPI(title="BUNK24 Gallery API", description="Catalog, orders, and checkout API for BUNK24 — art by TURNER.", version="1.0.0", lifespan=lifespan)
