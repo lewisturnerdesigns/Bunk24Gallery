@@ -141,6 +141,13 @@ def update_order_status(order_id: int, payload: OrderStatusUpdate, _: str = Depe
         raise HTTPException(status_code=404, detail="Order not found.")
     if payload.status in {"paid", "processing", "shipped"} and order.status == "pending":
         raise HTTPException(status_code=409, detail="A pending order cannot be marked paid manually; verify its payment webhook first.")
+    if payload.status in {"cancelled", "refunded"} and order.inventory_reserved:
+        items = db.scalars(select(models.OrderItem).where(models.OrderItem.order_id == order.id)).all()
+        for item in items:
+            variant = db.scalar(select(models.PrintVariant).where(models.PrintVariant.id == item.variant_id).with_for_update())
+            if variant:
+                variant.inventory_quantity += item.quantity
+        order.inventory_reserved = False
     order.status = payload.status
     db.commit()
     return {"id": order.id, "status": order.status}
