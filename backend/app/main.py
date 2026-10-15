@@ -162,30 +162,41 @@ async def stripe_webhook(request: Request, stripe_signature: str | None = Header
     if db.get(stripe_events.StripeEvent, event_id):
         return {"received": True, "duplicate": True}
     event_type = event["type"]
-    if event_type in {"checkout.session.completed", "checkout.session.async_payment_succeeded"}:
+    handled_types = {"checkout.session.completed", "checkout.session.async_payment_succeeded", "checkout.session.expired", "checkout.session.async_payment_failed"}
+    if event_type in handled_types:
         session_data = event["data"]["object"]
-        if session_data.get("payment_status") == "paid":
-            metadata = session_data.get("metadata") or {}
-            try:
-                order_id = int(metadata.get("order_id", ""))
-            except (TypeError, ValueError) as error:
-                raise HTTPException(status_code=400, detail="Checkout session has no valid order reference.") from error
-            order = db.scalar(select(models.Order).where(models.Order.id == order_id).with_for_update())
-            if not order:
-                raise HTTPException(status_code=404, detail="Order reference was not found.")
-            if order.stripe_session_id and order.stripe_session_id != session_data.get("id"):
-                raise HTTPException(status_code=400, detail="Checkout session does not match this order.")
+        metadata = session_data.get("metadata") or {}
+        try:
+            order_id = int(metadata.get("order_id", ""))
+        except (TypeError, ValueError) as error:
+            raise HTTPException(status_code=400, detail="Checkout session has no valid order reference.") from error
+        order = db.scalar(select(models.Order).where(models.Order.id == order_id).with_for_update())
+        if not order:
+            raise HTTPException(status_code=404, detail="Order reference was not found.")
+        if order.stripe_session_id and order.stripe_session_id != session_data.get("id"):
+            raise HTTPException(status_code=400, detail="Checkout session does not match this order.")
+        if event_type in {"checkout.session.completed", "checkout.session.async_payment_succeeded"} and session_data.get("payment_status") == "paid":
             if order.status not in {"paid", "processing", "shipped", "refunded"}:
                 items = db.scalars(select(models.OrderItem).where(models.OrderItem.order_id == order.id)).all()
-                for item in items:
-                    variant = db.scalar(select(models.PrintVariant).where(models.PrintVariant.id == item.variant_id).with_for_update())
-                    if not variant:
-                        logger.error("Paid order %s references missing variant %s", order.id, item.variant_id)
-                        continue
-                    if variant.inventory_quantity < item.quantity:
-                        logger.error("Inventory shortfall on paid order %s, variant %s; review fulfillment", order.id, variant.id)
-                    variant.inventory_quantity = max(0, variant.inventory_quantity - item.quantity)
+                # Normally stock was reserved before checkout. A late payment after expiry
+                # needs a fresh decrement and may require manual oversell review.
+                if not order.inventory_reserved:
+                    for item in items:
+                        variant = db.scalar(select(models.PrintVariant).where(models.PrintVariant.id == item.variant_id).with_for_update())
+                        if variant:
+                            if variant.inventory_quantity < item.quantity:
+                                logger.error("Inventory shortfall on late paid order %s, variant %s", order.id, variant.id)
+                            variant.inventory_quantity = max(0, variant.inventory_quantity - item.quantity)
+                order.inventory_reserved = False
                 order.status = "paid"
+        elif event_type in {"checkout.session.expired", "checkout.session.async_payment_failed"} and order.inventory_reserved and order.status == "pending":
+            items = db.scalars(select(models.OrderItem).where(models.OrderItem.order_id == order.id)).all()
+            for item in items:
+                variant = db.scalar(select(models.PrintVariant).where(models.PrintVariant.id == item.variant_id).with_for_update())
+                if variant:
+                    variant.inventory_quantity += item.quantity
+            order.inventory_reserved = False
+            order.status = "cancelled"
     db.add(stripe_events.StripeEvent(id=event_id, event_type=event_type))
     try:
         db.commit()
@@ -216,6 +227,9 @@ def checkout(payload: CheckoutRequest, db: Session = Depends(get_db)):
         for variant_id, quantity in requested.items():
             db.add(models.OrderItem(order_id=order.id, variant_id=variant_id, quantity=quantity, unit_price_cents=by_id[variant_id].price_cents))
         db.flush()
+        for variant_id, quantity in requested.items():
+            by_id[variant_id].inventory_quantity -= quantity
+        order.inventory_reserved = True
         stripe_items = [{"quantity": quantity, "price_data": {"currency": "usd", "unit_amount": by_id[variant_id].price_cents, "product_data": {"name": by_id[variant_id].artwork.title + " — " + by_id[variant_id].label}}} for variant_id, quantity in requested.items()]
         url, session_id = create_checkout_session(str(payload.email), stripe_items, order.id)
         order.stripe_session_id = session_id
