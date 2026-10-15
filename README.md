@@ -47,7 +47,7 @@ Put the resulting hash in ADMIN_PASSWORD_HASH and your admin email in ADMIN_EMAI
 
 ### Frontend on Vercel
 
-Import this repository into Vercel and set the Root Directory to frontend. Configure NEXT_PUBLIC_API_URL to the deployed API origin. The current shop artwork cards are presentation/demo content and are not yet wired to the API checkout flow.
+Import this repository into Vercel and set the Root Directory to frontend. Configure NEXT_PUBLIC_API_URL to the deployed API origin. The shop reads the published catalog from the API and submits the cart to the checkout endpoint. Local demo artwork is inserted only when SEED_DEMO_DATA=true; turn this off in production and replace demo artwork, prices, and inventory with approved catalog entries.
 
 ### API on Vercel or another ASGI host
 
