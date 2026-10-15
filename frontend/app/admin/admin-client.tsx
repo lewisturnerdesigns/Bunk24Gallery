@@ -49,7 +49,7 @@ export default function AdminClient() {
     } catch (error) { setNotice(error instanceof Error ? error.message : "Could not create artwork."); }
   }
   async function createVariant(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const form = new FormData(event.currentTarget); setNotice("");
+    event.preventDefault(); const formElement = event.currentTarget; const form = new FormData(formElement); setNotice("");
     try {
       await request("/admin/artworks/" + form.get("artwork_id") + "/variants", { method: "POST", body: JSON.stringify({ sku: form.get("sku"), label: form.get("label"), price_cents: Math.round(Number(form.get("price")) * 100), inventory_quantity: Number(form.get("inventory")), active: true }) });
       formElement.reset(); await refresh(); setNotice("Print variant created.");
