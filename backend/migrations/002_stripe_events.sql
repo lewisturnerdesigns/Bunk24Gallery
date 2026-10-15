@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS stripe_events (
+  id VARCHAR(255) PRIMARY KEY,
+  event_type VARCHAR(120) NOT NULL,
+  processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
