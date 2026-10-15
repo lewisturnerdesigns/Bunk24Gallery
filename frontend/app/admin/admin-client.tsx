@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { useState, type FormEvent } from "react";
 
 type Variant = { id: number; sku: string; label: string; price_cents: number; inventory_quantity: number; active: boolean };
 type Artwork = { id: number; slug: string; title: string; description: string; image_url: string; published: boolean; variants: Variant[] };
