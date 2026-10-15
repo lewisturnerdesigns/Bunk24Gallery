@@ -175,7 +175,7 @@ async def stripe_webhook(request: Request, stripe_signature: str | None = Header
                 raise HTTPException(status_code=404, detail="Order reference was not found.")
             if order.stripe_session_id and order.stripe_session_id != session_data.get("id"):
                 raise HTTPException(status_code=400, detail="Checkout session does not match this order.")
-            if order.status == "pending":
+            if order.status not in {"paid", "processing", "shipped", "refunded"}:
                 items = db.scalars(select(models.OrderItem).where(models.OrderItem.order_id == order.id)).all()
                 for item in items:
                     variant = db.scalar(select(models.PrintVariant).where(models.PrintVariant.id == item.variant_id).with_for_update())
