@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: bunk24-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   frontend:
     runs-on: ubuntu-latest
@@ -25,10 +29,50 @@ jobs:
 
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: bunk24_test
+          POSTGRES_USER: bunk24
+          POSTGRES_PASSWORD: test-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bunk24 -d bunk24_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://bunk24:test-only-password@localhost:5432/bunk24_test
+      JWT_SECRET_KEY: ci-only-secret-key-change-before-deployment
+      ADMIN_EMAIL: admin@example.com
+      ADMIN_PASSWORD_HASH: ""
+      SEED_DEMO_DATA: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install -r backend/requirements.txt
-      - run: python -m compileall -q backend/app backend/api
+      - name: Compile backend
+        run: python -m compileall -q app api
+        working-directory: backend
+      - name: Verify PostgreSQL schema creation and readiness
+        run: |
+          python - <<'PY'
+          from app.database import Base, engine, check_database_connection
+          from app import models, stripe_events
+          Base.metadata.create_all(bind=engine)
+          check_database_connection()
+          with engine.connect() as connection:
+              tables = set(connection.exec_driver_sql(
+                  "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
+              ).scalars())
+          required = {"artworks", "print_variants", "orders", "order_items", "stripe_events"}
+          missing = required - tables
+          if missing:
+              raise SystemExit(f"Missing database tables: {sorted(missing)}")
+          print("PostgreSQL connected; all required tables exist.")
+          PY
+        working-directory: backend
