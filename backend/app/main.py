@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Request, Header, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
 import stripe
@@ -42,6 +42,11 @@ def seed_demo_catalog() -> None:
 async def lifespan(_: FastAPI):
     # Convenient locally; deployments should apply the checked-in SQL migration first.
     Base.metadata.create_all(bind=engine)
+    # Keep existing local volumes compatible when new nullable/defaulted columns are added.
+    with engine.begin() as connection:
+        connection.execute(text(
+            "ALTER TABLE orders ADD COLUMN IF NOT EXISTS inventory_reserved BOOLEAN NOT NULL DEFAULT FALSE"
+        ))
     seed_demo_catalog()
     yield
 
