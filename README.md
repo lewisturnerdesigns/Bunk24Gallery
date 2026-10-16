@@ -29,7 +29,7 @@ The local `.env` file is intentionally ignored by Git, so **pulling updates will
 From the repository root in PowerShell, after pulling the latest changes, run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\\scripts\\repair-local-postgres.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\repair-local-postgres.ps1
 ```
 
 When prompted, enter the password for the PostgreSQL role `bunk24_app`. The helper updates only `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `DATABASE_URL`, preserving your other local settings. It points the API at your native PostgreSQL server at `127.0.0.1:5432` and database `bunk24_app`. It also URL-encodes special characters in the connection URL.
