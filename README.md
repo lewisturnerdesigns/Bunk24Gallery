@@ -24,22 +24,17 @@ The backend loads the repository-root `.env` file automatically, regardless of w
 
 ### 1. Configure environment variables
 
-From the repository root in PowerShell:
+The local `.env` file is intentionally ignored by Git, so **pulling updates will not overwrite or repair an existing `.env` file**. This repository includes a helper that fixes the PostgreSQL settings without displaying or committing your password.
+
+From the repository root in PowerShell, after pulling the latest changes, run:
 
 ```powershell
-Copy-Item .env.example .env
-notepad .env
+powershell -ExecutionPolicy Bypass -File .\\scripts\\repair-local-postgres.ps1
 ```
 
-In `.env`, set `DATABASE_URL` to match the PostgreSQL role, password, and database you created. For example, if both the role and database are named `bunk24_app`:
+When prompted, enter the password for the PostgreSQL role `bunk24_app`. The helper updates only `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `DATABASE_URL`, preserving your other local settings. It points the API at your native PostgreSQL server at `127.0.0.1:5432` and database `bunk24_app`. It also URL-encodes special characters in the connection URL.
 
-```dotenv
-DATABASE_URL=postgresql+psycopg://bunk24_app:YOUR_LOCAL_PASSWORD@127.0.0.1:5432/bunk24_app
-```
-
-Replace `YOUR_LOCAL_PASSWORD` with the password for that PostgreSQL role. If the password contains URL-reserved characters such as `@`, `:`, `/`, or `#`, URL-encode those characters in the URL. Keep the real password only in your local `.env` file.
-
-The checked-in `.env.example` contains placeholders, not working credentials. You do not need to create a second database if you already created `bunk24_app` in pgAdmin.
+The checked-in `.env.example` contains placeholders, not working credentials. You do not need to create a second database if you already created `bunk24_app` in pgAdmin. Keep the real password only in your local `.env` file; never commit it.
 
 ### 2. Install and start the API
 
