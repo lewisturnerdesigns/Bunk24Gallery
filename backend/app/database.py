@@ -13,10 +13,12 @@ PROJECT_ROOT = BACKEND_DIR.parent
 load_dotenv(PROJECT_ROOT / ".env")
 load_dotenv(BACKEND_DIR / ".env", override=False)
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+psycopg://app:app@localhost:5432/app",
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL is not set. Copy the repository-root .env.example to .env, "
+        "set DATABASE_URL to your local PostgreSQL connection, and restart the API."
+    )
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
