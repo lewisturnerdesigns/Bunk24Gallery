@@ -15,14 +15,17 @@ A full-stack art gallery and print-store foundation for BUNK24, featuring the wo
 Prerequisites: Docker Desktop and Git.
 
 1. Clone the repository.
-2. Copy .env.example to .env and replace the example database password and JWT secret.
-3. Run from the repository root:
+2. Copy `.env.example` to `.env`. Set a strong local `POSTGRES_PASSWORD` and a random `JWT_SECRET_KEY` of at least 32 characters. The Compose file builds the database URL from your PostgreSQL settings automatically.
+3. Start the whole stack from the repository root:
 
+   ```bash
    docker compose up --build
+   ```
 
-4. Visit the gallery at http://localhost:3000, API docs at http://localhost:8000/docs, API health at http://localhost:8000/health, and database readiness at http://localhost:8000/health/ready.
+   This builds the frontend and API containers, starts PostgreSQL, waits for the database health check, and then starts the API and web app. On API startup, SQLAlchemy creates any missing tables and a small compatibility step updates an existing local database when needed. Demo catalog rows are added only if `SEED_DEMO_DATA=true` and the catalog is empty.
+4. Visit the gallery at http://localhost:3000, admin at http://localhost:3000/admin, API docs at http://localhost:8000/docs, API health at http://localhost:8000/health, and database readiness at http://localhost:8000/health/ready.
 
-Stop with docker compose down. To also delete the local database volume, use docker compose down -v.
+Docker stores database files in the named `postgres_data` volume, so they persist when you stop containers. Stop with `docker compose down`. **Do not** use `docker compose down -v` unless you intentionally want to delete your local database data.
 
 ## Admin credentials
 
@@ -30,7 +33,7 @@ Generate a bcrypt password hash using the backend dependencies. From the backend
 
     python -c "from getpass import getpass; from passlib.context import CryptContext; print(CryptContext(schemes=['bcrypt']).hash(getpass('New admin password: ')))"
 
-Put the resulting hash in ADMIN_PASSWORD_HASH and your admin email in ADMIN_EMAIL in the local .env file. Never put the plaintext password in environment files or source control. Set a unique random JWT_SECRET_KEY of at least 32 characters. The admin web page is a visual placeholder; use the API docs to exercise protected endpoints after obtaining a bearer token.
+Put the resulting hash in ADMIN_PASSWORD_HASH and your admin email in ADMIN_EMAIL in the local .env file. Never put the plaintext password in environment files or source control. Set a unique random JWT_SECRET_KEY of at least 32 characters. Restart the stack after changing environment values with `docker compose up --build -d`. Then sign in at http://localhost:3000/admin to manage artwork, print variants, inventory, and orders.
 
 ## Repository layout
 
@@ -41,7 +44,8 @@ Put the resulting hash in ADMIN_PASSWORD_HASH and your admin email in ADMIN_EMAI
 - backend/app/security.py — JWT helpers and admin dependency.
 - backend/app/commerce.py — Stripe Checkout session creation.
 - backend/migrations/ — initial PostgreSQL schema.
-- compose.yaml — local frontend, API, and PostgreSQL services.
+- compose.yaml — local frontend, API, and PostgreSQL services with health checks and persistent database storage.
+- .github/workflows/ci.yml — automatic frontend type-check/build and backend/PostgreSQL schema checks on pushes and pull requests.
 
 ## Deployment notes
 
