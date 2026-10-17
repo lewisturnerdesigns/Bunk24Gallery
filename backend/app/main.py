@@ -1,7 +1,7 @@
 import logging
 import os
 from contextlib import asynccontextmanager
-from fastapi import Depends, FastAPI, HTTPException, Request, Header, status
+from fastapi import Depends, FastAPI, HTTPException, Request, Header, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select, text
@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 import stripe
 from app.database import Base, engine, check_database_connection
 from app import models, stripe_events
-from app.schemas import ArtworkOut, ArtworkCreate, VariantCreate, VariantUpdate, OrderStatusUpdate, CheckoutRequest, CheckoutResponse
+from app.schemas import ArtistCreate, ArtistOut, ArtworkOut, ArtworkCreate, ArtworkUpdate, VariantCreate, VariantUpdate, OrderStatusUpdate, CheckoutRequest, CheckoutResponse
 from app.security import create_access_token, require_admin, verify_admin_password
 from app.commerce import create_checkout_session
 
@@ -47,6 +47,13 @@ async def lifespan(_: FastAPI):
         connection.execute(text(
             "ALTER TABLE orders ADD COLUMN IF NOT EXISTS inventory_reserved BOOLEAN NOT NULL DEFAULT FALSE"
         ))
+        connection.execute(text("ALTER TABLE artworks ADD COLUMN IF NOT EXISTS artist_id INTEGER REFERENCES artists(id) ON DELETE SET NULL"))
+        connection.execute(text("ALTER TABLE artworks ADD COLUMN IF NOT EXISTS artist_featured BOOLEAN NOT NULL DEFAULT FALSE"))
+        connection.execute(text("ALTER TABLE artworks ADD COLUMN IF NOT EXISTS artist_featured_order INTEGER NOT NULL DEFAULT 0"))
+        connection.execute(text("ALTER TABLE artworks ADD COLUMN IF NOT EXISTS site_featured BOOLEAN NOT NULL DEFAULT FALSE"))
+        connection.execute(text("ALTER TABLE artworks ADD COLUMN IF NOT EXISTS site_featured_order INTEGER NOT NULL DEFAULT 0"))
+        connection.execute(text("ALTER TABLE artworks ADD COLUMN IF NOT EXISTS image_data BYTEA"))
+        connection.execute(text("ALTER TABLE artworks ADD COLUMN IF NOT EXISTS image_content_type VARCHAR(100)"))
     seed_demo_catalog()
     yield
 
@@ -77,7 +84,7 @@ def readiness() -> dict[str, str]:
 @app.get("/api/artworks", response_model=list[ArtworkOut], tags=["catalog"])
 def list_artworks(db: Session = Depends(get_db)):
     try:
-        return db.scalars(select(models.Artwork).where(models.Artwork.published.is_(True)).options(selectinload(models.Artwork.variants.and_(models.PrintVariant.active.is_(True)))).order_by(models.Artwork.created_at.desc())).all()
+        return db.scalars(select(models.Artwork).where(models.Artwork.published.is_(True)).options(selectinload(models.Artwork.variants.and_(models.PrintVariant.active.is_(True)))).order_by(models.Artwork.site_featured.desc(), models.Artwork.site_featured_order.asc(), models.Artwork.created_at.desc())).all()
     except SQLAlchemyError as error:
         logger.exception("Could not load artwork catalog")
         raise HTTPException(status_code=503, detail="Catalog is temporarily unavailable") from error
@@ -92,13 +99,32 @@ def login(form: OAuth2PasswordRequestForm = Depends()):
     except RuntimeError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
 
+@app.get("/admin/artists", response_model=list[ArtistOut], tags=["admin"])
+def admin_artists(_: str = Depends(require_admin), db: Session = Depends(get_db)):
+    return db.scalars(select(models.Artist).order_by(models.Artist.name.asc())).all()
+
+@app.post("/admin/artists", response_model=ArtistOut, tags=["admin"])
+def create_artist(payload: ArtistCreate, _: str = Depends(require_admin), db: Session = Depends(get_db)):
+    artist = models.Artist(**payload.model_dump())
+    db.add(artist)
+    try:
+        db.commit()
+        db.refresh(artist)
+        return artist
+    except IntegrityError as error:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="An artist with that name or slug already exists.") from error
+
 @app.get("/admin/artworks", tags=["admin"])
 def admin_artworks(_: str = Depends(require_admin), db: Session = Depends(get_db)):
-    return db.scalars(select(models.Artwork).options(selectinload(models.Artwork.variants)).order_by(models.Artwork.created_at.desc())).all()
+    return db.scalars(select(models.Artwork).options(selectinload(models.Artwork.variants), selectinload(models.Artwork.artist)).order_by(models.Artwork.created_at.desc())).all()
 
 @app.post("/admin/artworks", response_model=ArtworkOut, tags=["admin"])
 def create_artwork(payload: ArtworkCreate, _: str = Depends(require_admin), db: Session = Depends(get_db)):
-    artwork = models.Artwork(**payload.model_dump())
+    values = payload.model_dump()
+    if values["artist_id"] is not None and not db.get(models.Artist, values["artist_id"]):
+        raise HTTPException(status_code=404, detail="Artist not found.")
+    artwork = models.Artwork(**values)
     db.add(artwork)
     try:
         db.commit()
@@ -107,6 +133,45 @@ def create_artwork(payload: ArtworkCreate, _: str = Depends(require_admin), db: 
     except IntegrityError as error:
         db.rollback()
         raise HTTPException(status_code=409, detail="An artwork with that slug already exists.") from error
+
+@app.patch("/admin/artworks/{artwork_id}", response_model=ArtworkOut, tags=["admin"])
+def update_artwork(artwork_id: int, payload: ArtworkUpdate, _: str = Depends(require_admin), db: Session = Depends(get_db)):
+    artwork = db.get(models.Artwork, artwork_id)
+    if not artwork:
+        raise HTTPException(status_code=404, detail="Artwork not found.")
+    values = payload.model_dump(exclude_unset=True)
+    if values.get("artist_id") is not None and not db.get(models.Artist, values["artist_id"]):
+        raise HTTPException(status_code=404, detail="Artist not found.")
+    for key, value in values.items():
+        setattr(artwork, key, value)
+    db.commit()
+    db.refresh(artwork)
+    return artwork
+
+@app.post("/admin/artworks/{artwork_id}/image", tags=["admin"])
+async def upload_artwork_image(artwork_id: int, request: Request, image: UploadFile = File(...), _: str = Depends(require_admin), db: Session = Depends(get_db)):
+    artwork = db.get(models.Artwork, artwork_id)
+    if not artwork:
+        raise HTTPException(status_code=404, detail="Artwork not found.")
+    allowed = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+    if image.content_type not in allowed:
+        raise HTTPException(status_code=415, detail="Upload a JPG, PNG, WebP, or GIF image.")
+    content = await image.read(12 * 1024 * 1024 + 1)
+    if not content or len(content) > 12 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Image must be smaller than 12 MB.")
+    artwork.image_data = content
+    artwork.image_content_type = image.content_type
+    artwork.image_url = str(request.base_url).rstrip("/") + f"/api/artworks/{artwork.id}/image"
+    db.commit()
+    return {"image_url": artwork.image_url}
+
+@app.get("/api/artworks/{artwork_id}/image", tags=["catalog"])
+def artwork_image(artwork_id: int, db: Session = Depends(get_db)):
+    from fastapi.responses import Response
+    artwork = db.get(models.Artwork, artwork_id)
+    if not artwork or not artwork.image_data or not artwork.image_content_type:
+        raise HTTPException(status_code=404, detail="Image not found.")
+    return Response(content=artwork.image_data, media_type=artwork.image_content_type, headers={"Cache-Control": "public, max-age=3600"})
 
 @app.post("/admin/artworks/{artwork_id}/variants", tags=["admin"])
 def create_variant(artwork_id: int, payload: VariantCreate, _: str = Depends(require_admin), db: Session = Depends(get_db)):
