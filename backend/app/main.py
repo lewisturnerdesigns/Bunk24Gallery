@@ -163,9 +163,9 @@ async def upload_artwork_image(artwork_id: int, request: Request, image: UploadF
     allowed = {"image/jpeg", "image/png", "image/webp", "image/gif"}
     if image.content_type not in allowed:
         raise HTTPException(status_code=415, detail="Upload a JPG, PNG, WebP, or GIF image.")
-    content = await image.read(12 * 1024 * 1024 + 1)
-    if not content or len(content) > 12 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Image must be smaller than 12 MB.")
+    content = await image.read(4 * 1024 * 1024 + 1)
+    if not content or len(content) > 4 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Image must be smaller than 4 MB.")
     artwork.image_data = content
     artwork.image_content_type = image.content_type
     artwork.image_url = str(request.base_url).rstrip("/") + f"/api/artworks/{artwork.id}/image"
