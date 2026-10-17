@@ -34,7 +34,7 @@ export default function AdminClient() {
   const [dropId, setDropId] = useState<number | null>(null);
   const [featureList, setFeatureList] = useState<FeatureList>("site");
   const [artistFilter, setArtistFilter] = useState<string>("all");
-  const [sidebarPinned, setSidebarPinned] = useState(false);
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
   async function request(path: string, options: RequestInit = {}) {
     const response = await fetch(api + path, { ...options, headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}), ...options.headers } });
@@ -139,10 +139,9 @@ export default function AdminClient() {
   return <section className="admin-page">
     <div className="admin-top"><div><p className="eyebrow">BUNK24 / CONTROL ROOM</p><h1>Studio workspace.</h1><p>A calmer place to run the gallery, artists, prints, and orders.</p></div><span className="shop-tag">STUDIO ADMIN</span></div>
     {!token ? <form className="admin-panel admin-login" onSubmit={login}><h2>Studio sign-in</h2><p>Sign in with the admin credentials configured on the API server.</p><label htmlFor="admin-email">Admin email</label><input id="admin-email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)}/><label htmlFor="admin-password">Password</label><input id="admin-password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)}/><button className="admin-link" disabled={busy}>{busy ? "Signing in…" : "Sign in securely ↗"}</button></form> :
-      <div className={"admin-workspace" + (sidebarPinned ? " admin-sidebar-pinned" : "")}>
-        <aside className="admin-sidebar" aria-label="Admin navigation" onMouseEnter={() => {}} onMouseLeave={() => {}}>
+      <div className={"admin-workspace" + (sidebarExpanded ? " admin-sidebar-expanded" : "")}>
+        <aside className="admin-sidebar" aria-label="Admin navigation" onMouseEnter={() => setSidebarExpanded(true)} onMouseLeave={() => setSidebarExpanded(false)}>
           <div className="admin-sidebar-brand"><span className="admin-brand-mark">B</span><span className="admin-sidebar-wordmark">BUNK24 <small>STUDIO ADMIN</small></span></div>
-          <button className="admin-sidebar-toggle" type="button" onClick={() => setSidebarPinned((value) => !value)} aria-label={sidebarPinned ? "Unpin expanded menu" : "Keep menu expanded"} title={sidebarPinned ? "Unpin menu" : "Pin menu open"}>{sidebarPinned ? "‹" : "›"}</button>
           <nav className="admin-side-nav">{navigation.map((item) => <button type="button" key={item.id} className={"admin-nav-item" + (section === item.id ? " active" : "")} onClick={() => setSection(item.id)} title={item.label}><span className="admin-nav-icon">{item.icon}</span><span className="admin-nav-copy"><strong>{item.label}</strong><small>{item.hint}</small></span></button>)}</nav>
           <div className="admin-sidebar-bottom"><span className="admin-avatar">{email.slice(0, 1).toUpperCase() || "A"}</span><span className="admin-sidebar-wordmark"><strong>{email}</strong><small>Administrator</small></span><button type="button" className="admin-signout-icon" title="Sign out" aria-label="Sign out" onClick={() => { setToken(""); setArtists([]); setArtworks([]); setOrders([]); setNotice("Signed out."); }}>↪</button></div>
         </aside>
