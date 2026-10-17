@@ -1,7 +1,16 @@
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
+
+class Artist(Base):
+    __tablename__ = "artists"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(180), unique=True, index=True)
+    slug: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    bio: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    artworks: Mapped[list["Artwork"]] = relationship(back_populates="artist")
 
 class Artwork(Base):
     __tablename__ = "artworks"
@@ -10,8 +19,16 @@ class Artwork(Base):
     title: Mapped[str] = mapped_column(String(180))
     description: Mapped[str] = mapped_column(Text, default="")
     image_url: Mapped[str] = mapped_column(String(1000), default="")
+    image_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    image_content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    artist_id: Mapped[int | None] = mapped_column(ForeignKey("artists.id", ondelete="SET NULL"), nullable=True, index=True)
+    artist_featured: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    artist_featured_order: Mapped[int] = mapped_column(Integer, default=0)
+    site_featured: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    site_featured_order: Mapped[int] = mapped_column(Integer, default=0)
     published: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    artist: Mapped[Artist | None] = relationship(back_populates="artworks")
     variants: Mapped[list["PrintVariant"]] = relationship(back_populates="artwork", cascade="all, delete-orphan")
 
 class PrintVariant(Base):
