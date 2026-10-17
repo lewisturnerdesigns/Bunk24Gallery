@@ -117,7 +117,14 @@ def create_artist(payload: ArtistCreate, _: str = Depends(require_admin), db: Se
 
 @app.get("/admin/artworks", tags=["admin"])
 def admin_artworks(_: str = Depends(require_admin), db: Session = Depends(get_db)):
-    return db.scalars(select(models.Artwork).options(selectinload(models.Artwork.variants), selectinload(models.Artwork.artist)).order_by(models.Artwork.created_at.desc())).all()
+    records = db.scalars(select(models.Artwork).options(selectinload(models.Artwork.variants), selectinload(models.Artwork.artist)).order_by(models.Artwork.created_at.desc())).all()
+    return [{
+        "id": a.id, "slug": a.slug, "title": a.title, "description": a.description, "image_url": a.image_url,
+        "artist_id": a.artist_id, "artist_name": a.artist.name if a.artist else None,
+        "artist_featured": a.artist_featured, "artist_featured_order": a.artist_featured_order,
+        "site_featured": a.site_featured, "site_featured_order": a.site_featured_order, "published": a.published,
+        "variants": [{"id": v.id, "sku": v.sku, "label": v.label, "price_cents": v.price_cents, "inventory_quantity": v.inventory_quantity, "active": v.active} for v in a.variants]
+    } for a in records]
 
 @app.post("/admin/artworks", response_model=ArtworkOut, tags=["admin"])
 def create_artwork(payload: ArtworkCreate, _: str = Depends(require_admin), db: Session = Depends(get_db)):
