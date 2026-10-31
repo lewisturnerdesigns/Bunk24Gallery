@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Artist {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique @db.VarChar(180)
+  slug      String    @unique @db.VarChar(120)
+  bio       String    @db.Text
+  createdAt DateTime  @default(now())
+  artworks  Artwork[]
+}
+
+model Artwork {
+  id                 Int            @id @default(autoincrement())
+  slug               String         @unique @db.VarChar(120)
+  title              String         @db.VarChar(180)
+  description        String         @db.Text
+  imageUrl           String         @db.VarChar(1000)
+  imageData          Bytes?
+  imageContentType   String?        @db.VarChar(100)
+  artistId           Int?
+  artistFeatured     Boolean        @default(false)
+  artistFeaturedOrder Int           @default(0)
+  siteFeatured       Boolean        @default(false)
+  siteFeaturedOrder  Int            @default(0)
+  published          Boolean        @default(false)
+  createdAt          DateTime       @default(now())
+  artist             Artist?        @relation(fields: [artistId], references: [id], onDelete: SetNull)
+  variants           PrintVariant[]
+  @@index([published, siteFeatured, siteFeaturedOrder])
+}
+
+model PrintVariant {
+  id                Int      @id @default(autoincrement())
+  artworkId         Int
+  sku               String   @unique @db.VarChar(80)
+  label             String   @db.VarChar(120)
+  priceCents        Int
+  inventoryQuantity Int      @default(0)
+  active            Boolean  @default(true)
+  artwork           Artwork  @relation(fields: [artworkId], references: [id], onDelete: Cascade)
+}
+
+model Order {
+  id                Int         @id @default(autoincrement())
+  email             String      @db.VarChar(320)
+  status            String      @default("pending") @db.VarChar(32)
+  currency          String      @default("usd") @db.VarChar(3)
+  totalCents        Int
+  stripeSessionId   String?     @unique @db.VarChar(255)
+  inventoryReserved Boolean     @default(false)
+  createdAt         DateTime    @default(now())
+  items             OrderItem[]
+}
+
+model OrderItem {
+  id              Int      @id @default(autoincrement())
+  orderId         Int
+  variantId       Int
+  quantity        Int
+  unitPriceCents  Int
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model StripeEvent {
+  id        String   @id @db.VarChar(255)
+  type      String   @db.VarChar(120)
+  createdAt DateTime @default(now())
+}
