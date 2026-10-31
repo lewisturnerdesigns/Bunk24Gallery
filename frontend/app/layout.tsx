@@ -13,5 +13,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return <html lang="en" suppressHydrationWarning><body><script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem("bunk24-theme");var s=window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.dataset.theme=t||(s?"dark":"light");}catch(e){document.documentElement.dataset.theme="light";}})();` }} />{children}</body></html>;
 }
